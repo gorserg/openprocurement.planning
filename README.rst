@@ -1,2 +1,3 @@
-# openprocurement.planning
+openprocurement.planning
+===========================
 Planning  API interface to OpenProcurement database

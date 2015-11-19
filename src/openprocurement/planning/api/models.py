@@ -1,0 +1,149 @@
+# -*- coding: utf-8 -*-
+
+from couchdb_schematics.document import SchematicsDocument
+from pyramid.security import Allow
+from schematics.types import StringType, FloatType, IntType, URLType, BooleanType, BaseType, EmailType, MD5Type
+from schematics.types.compound import ModelType, ListType, DictType
+from schematics.transforms import whitelist, blacklist, export_loop, convert
+from schematics.types.serializable import serializable
+from uuid import uuid4
+from  openprocurement.api.models import Model, CPVClassification, Classification, validate_dkpp, Unit, Period, \
+    Identifier, validate_cpv_group, IsoDateTimeType, Revision, schematics_default_role, schematics_embedded_role
+
+
+class Project(Model):
+    """A project."""
+
+    id = StringType(required=True)
+    name = StringType(required=True)
+
+
+class Budget(Model):
+    """A budget."""
+
+    id = StringType(required=True)
+    description = StringType(required=True)
+    amount = FloatType(required=True)
+    amountNet = FloatType()
+    project = ModelType(Project)
+
+
+class PlanItem(Model):
+    """Simple item model for planing"""
+
+    id = StringType(required=True, min_length=1, default=lambda: uuid4().hex)
+    classification = ModelType(CPVClassification, required=True)
+    additionalClassifications = ListType(ModelType(Classification), default=list(), required=True, min_size=1,
+                                         validators=[validate_dkpp])
+    unit = ModelType(Unit)  # Description of the unit which the good comes in e.g. hours, kilograms
+    quantity = IntType()  # The number of units required
+    deliveryDate = ModelType(Period)
+
+
+class PlanOrganization(Model):
+    """An organization."""
+
+    name = StringType(required=True)
+    name_en = StringType()
+    name_ru = StringType()
+    identifier = ModelType(Identifier, required=True)
+
+
+class PlanTender(Model):
+    procurementMethod = StringType(
+        choices=[u'допорогові закупівлі', u'відкриті торги', u'конкурентний діалог', u'переговорна процедура',
+                 u'рамкова угода'])
+    tenderPeriod = ModelType(Period, required=False)
+
+
+plain_role = (blacklist('revisions', 'dateModified') + schematics_embedded_role)
+create_role = (blacklist('owner_token', 'owner', 'revisions', 'dateModified', 'doc_id', 'planID') + schematics_embedded_role)
+edit_role = (blacklist('owner_token', 'owner', 'revisions', 'dateModified', 'doc_id', 'planID') + schematics_embedded_role)
+cancel_role = whitelist('status')
+view_role = (blacklist('owner', 'owner_token', '_attachments', 'revisions') + schematics_embedded_role)
+listing_role = whitelist('dateModified', 'doc_id')
+Administrator_role = whitelist('status', 'mode', 'procuringEntity')
+
+class Plan(SchematicsDocument, Model):
+    """Plan"""
+
+    class Options:
+        roles = {
+            'plain': plain_role,
+            'create': create_role,
+            'edit': edit_role,
+            'view': view_role,
+            'listing': listing_role,
+            'unsuccessful': view_role,
+            'cancelled': view_role,
+            'Administrator': Administrator_role,
+            'default': schematics_default_role,
+        }
+
+    def __local_roles__(self):
+        return dict([('{}_{}'.format(self.owner, self.owner_token), 'plan_owner')])
+
+    # fields
+
+    # procuringEntity:identifier:scheme *     Код Замовника -- Схема ідентификації по стандарту IATI, (наприклад код ЄДР - UA-EDR)
+    # procuringEntity:identifier:id *         Для схеми UA-EDR - код ЄДРПОУ або ІПН
+    # procuringEntity:name *                  Коротка назва организації (наприклад - ДУС)
+    # procuringEntity:identifier:legalName *  Повна назва организації (наприклад - ДП “Державне Уравління Справами”)
+    procuringEntity = ModelType(PlanOrganization, required=True)
+
+    # tender:tenderPeriod:startDate           Планова дата старту процедури
+    # tender:procurementMethod                Можливі варіанти: “допорогові закупівлі”, “відкриті торги”, ”конкурентний діалог”, “переговорна процедура” та  “рамкова угода”
+    tender = ModelType(PlanTender, required=False)
+
+    # budget:project:name                     Назва коду класифікатора КЕКВ
+    # budget:project:id                       Код класифікатора КЕКВ
+    # budget:id *                             Комбінація budget:project:id  та items[*]:classification:id
+    # budget:description *                    Довільний опис статті бюджету
+    # budget:amount *                         Планова сума з ПДВ
+    # budget:amountNet                        Планова сума без ПДВ
+    budget = ModelType(Budget, required=True)
+
+    planID = StringType()
+    mode = StringType(choices=['test']) # flag for test data ?
+    items = ListType(ModelType(PlanItem), required=True, min_size=1, validators=[validate_cpv_group])
+    dateModified = IsoDateTimeType()
+    owner_token = StringType()
+    owner = StringType()
+    revisions = ListType(ModelType(Revision), default=list())
+
+    __name__ = ''
+
+    def __acl__(self):
+        acl = [
+            # (Allow, '{}_{}'.format(i.owner, i.owner_token), 'create_award_complaint')
+            # for i in self.bids
+        ]
+        acl.extend([
+            (Allow, '{}_{}'.format(self.owner, self.owner_token), 'edit_tender'),
+            (Allow, '{}_{}'.format(self.owner, self.owner_token), 'upload_tender_documents'),
+            (Allow, '{}_{}'.format(self.owner, self.owner_token), 'review_complaint'),
+        ])
+        return acl
+
+    def __repr__(self):
+        return '<%s:%r@%r>' % (type(self).__name__, self.id, self.rev)
+
+    @serializable(serialized_name='id')
+    def doc_id(self):
+        """A property that is serialized by schematics exports."""
+        return self._id
+
+    def import_data(self, raw_data, **kw):
+        """
+        Converts and imports the raw data into the instance of the model
+        according to the fields in the model.
+        :param raw_data:
+            The data to be imported.
+        """
+        data = self.convert(raw_data, **kw)
+        del_keys = [k for k in data.keys() if not data[k]]
+        for k in del_keys:
+            del data[k]
+
+        self._data.update(data)
+        return self
