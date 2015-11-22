@@ -12,7 +12,7 @@ from openprocurement.api.utils import get_revision_changes, Revision, context_un
 from openprocurement.planning.api.design import sync_design_plan
 
 
-def initPlanning(config):
+def init_planning_module(config):
     # scan view in direcory planning/views
     config.scan("openprocurement.planning.api.views")
 
