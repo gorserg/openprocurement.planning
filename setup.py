@@ -34,7 +34,7 @@ main = openprocurement.planning:main
 """
 
 setup(name='openprocurement.planning',
-      version='0.1',
+      version='0.2',
       description='Planning API to openprocurement',
       long_description=README,
       classifiers=[
