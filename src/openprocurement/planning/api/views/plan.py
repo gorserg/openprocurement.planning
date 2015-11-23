@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
 from logging import getLogger
-
 from openprocurement.api.models import get_now
 from openprocurement.api.utils import (generate_id,
                                        set_ownership,
                                        opresource,
                                        json_view,
                                        context_unpack,
-                                       apply_patch
+                                       apply_patch,
+                                       get_data_listing
                                        )
-from openprocurement.api.views.tender import decrypt, encrypt
 from openprocurement.planning.api.design import (PLAN_FIELDS, plans_real_by_dateModified_planview,
-                                          plans_test_by_dateModified_planview, plans_by_dateModified_planview,
-                                          plans_real_by_local_seq_planview, plans_test_by_local_seq_planview,
-                                          plans_by_local_seq_planview)
+                                                 plans_test_by_dateModified_planview, plans_by_dateModified_planview,
+                                                 plans_real_by_local_seq_planview, plans_test_by_local_seq_planview,
+                                                 plans_by_local_seq_planview)
 from openprocurement.planning.api.models import Plan
-from openprocurement.planning.api import generate_plan_id, save_plan, plan_serialize #, get_extend_acls
+from openprocurement.planning.api import generate_plan_id, save_plan, plan_serialize
 from openprocurement.planning.api.validation import validate_plan_data, validate_patch_plan_data
 
 LOGGER = getLogger(__name__)
@@ -44,12 +43,12 @@ FEED = {
 @opresource(name='Plan',
             collection_path='/plans',
             path='/plans/{plan_id}',
-            #acl=get_planend_acls,  # planeded acl list
             description="Planing http://ocds.open-contracting.org/standard/r/1__0__0/en/schema/reference/#planning")
 class PlanResource(object):
     def __init__(self, request):
         self.request = request
         self.db_plan = request.registry.db_plan
+        self.server = request.registry.couchdb_server
         self.server_id = request.registry.server_id
 
     @json_view(permission='view_plan')
@@ -84,111 +83,7 @@ class PlanResource(object):
             }
 
         """
-        params = {}
-        pparams = {}
-        # list of additional columns in result json, separated by comma - `?opt_fields=comma,separated,field,list`
-        fields = self.request.params.get('opt_fields', '')
-        if fields:
-            params['opt_fields'] = fields
-            pparams['opt_fields'] = fields
-            fields = fields.split(',')
-            view_fields = fields + ['dateModified', 'id']  # add two base field always
-        limit = self.request.params.get('limit', '')  # batch size of result data
-        if limit:
-            params['limit'] = limit
-            pparams['limit'] = limit
-        limit = int(limit) if limit.isdigit() and int(
-            limit) > 0 else 100  # todo maybe max limit - and int(limit < 1000) ?
-        descending = bool(self.request.params.get('descending'))  # sort order
-        offset = self.request.params.get('offset', '')
-        if descending:
-            params['descending'] = 1
-        else:
-            pparams['descending'] = 1
-        feed = self.request.params.get('feed', '')  # in ('dateModified', 'changes'), default = ''
-
-        view_map = FEED.get(feed, VIEW_MAP)  # get type of views
-        changes = view_map is CHANGES_VIEW_MAP  # boolean, true - in case 'changes' views
-        if feed and feed in FEED:
-            params['feed'] = feed
-            pparams['feed'] = feed
-        mode = self.request.params.get('mode', '')  # in ('', '_all_', 'test')
-        if mode and mode in view_map:
-            params['mode'] = mode
-            pparams['mode'] = mode
-        view_limit = limit + 1 if offset else limit
-        if changes:
-            if offset:
-                view_offset = decrypt(self.server.uuid, self.db_plan.name, offset)
-                if view_offset and view_offset.isdigit():
-                    view_offset = int(view_offset)
-                else:
-                    self.request.errors.add('params', 'offset', 'Offset expired/invalid')
-                    self.request.errors.status = 404
-                    return
-            if not offset:
-                view_offset = 'now' if descending else 0
-        else:
-            if offset:
-                view_offset = offset
-            else:
-                view_offset = '9' if descending else ''
-        list_view = view_map.get(mode, view_map[u''])  # result view
-
-        if fields:
-            if not changes and set(fields).issubset(set(PLAN_FIELDS)):
-                results = [
-                    (dict([(i, j) for i, j in x.value.items() + [('id', x.id), ('dateModified', x.key)] if
-                           i in view_fields]), x.key)
-                    for x in list_view(self.db_plan, limit=view_limit, startkey=view_offset, descending=descending)
-                    ]
-            elif changes and set(fields).issubset(set(PLAN_FIELDS)):
-                results = [
-                    (dict([(i, j) for i, j in x.value.items() + [('id', x.id)] if i in view_fields]), x.key)
-                    for x in list_view(self.db_plan, limit=view_limit, startkey=view_offset, descending=descending)
-                    ]
-            elif fields:
-                LOGGER.info('Used custom fields for plans list: {}'.format(','.join(sorted(fields))),
-                            extra=context_unpack(self.request, {'MESSAGE_ID': 'plans_list_custom'}))
-                results = [
-                    (plan_serialize(Plan(i[u'doc']), view_fields), i.key)
-                    for i in list_view(self.db_plan, limit=view_limit, startkey=view_offset, descending=descending,
-                                       include_docs=True)
-                    ]
-        else:
-            results = [
-                ({'id': i.id, 'dateModified': i.value['dateModified']} if changes else {'id': i.id,
-                                                                                        'dateModified': i.key}, i.key)
-                for i in list_view(self.db_plan, limit=view_limit, startkey=view_offset, descending=descending)
-                ]
-        if results:
-            params['offset'], pparams['offset'] = results[-1][1], results[0][1]
-            if offset and view_offset == results[0][1]:
-                results = results[1:]
-            elif offset and view_offset != results[0][1]:
-                results = results[:limit]
-                params['offset'], pparams['offset'] = results[-1][1], view_offset
-            results = [i[0] for i in results]
-            if changes:
-                params['offset'] = encrypt(self.server.uuid, self.db_plan.name, params['offset'])
-                pparams['offset'] = encrypt(self.server.uuid, self.db_plan.name, pparams['offset'])
-        else:
-            params['offset'] = offset
-            pparams['offset'] = offset
-        data = {
-            'data': results,
-            'next_page': {
-                "offset": params['offset'],
-                "path": self.request.route_path('collection_Plan', _query=params),
-                "uri": self.request.route_url('collection_Plan', _query=params)
-            }
-        }
-        if descending or offset:
-            data['prev_page'] = {
-                "offset": pparams['offset'],
-                "path": self.request.route_path('collection_Plan', _query=pparams),
-                "uri": self.request.route_url('collection_Plan', _query=pparams)
-            }
+        data = get_data_listing(self.request, self.server, self.db_plan, PLAN_FIELDS, Plan, plan_serialize,  FEED, VIEW_MAP, CHANGES_VIEW_MAP);
         return data
 
     @json_view(content_type="application/json", permission='create_plan', validators=(validate_plan_data))
@@ -433,7 +328,6 @@ class PlanResource(object):
         plan = self.request.validated['plan']
         plan_data = plan.serialize('view')
         return {'data': plan_data}
-
 
     @json_view(content_type="application/json", validators=(validate_patch_plan_data), permission='edit_plan')
     def patch(self):
