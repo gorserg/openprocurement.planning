@@ -24,6 +24,7 @@ class Budget(Model):
     id = StringType(required=True)
     description = StringType(required=True)
     amount = FloatType(required=True)
+    currency = StringType(required=False, default=u'UAH', max_length=3, min_length=3)  # The currency in 3-letter ISO 4217 format.
     amountNet = FloatType()
     project = ModelType(Project)
 
@@ -52,12 +53,12 @@ class PlanOrganization(Model):
 class PlanTender(Model):
     procurementMethod = StringType(
         choices=[u'допорогові закупівлі', u'відкриті торги', u'конкурентний діалог', u'переговорна процедура',
-                 u'рамкова угода'])
+                 u'рамкова угода', 'open'], default='open')
     tenderPeriod = ModelType(Period, required=False)
 
 
 plain_role = (blacklist('revisions', 'dateModified') + schematics_embedded_role)
-create_role = (blacklist('owner_token', 'owner', 'revisions', 'dateModified', 'doc_id', 'planID') + schematics_embedded_role)
+create_role = (blacklist('owner_token', 'owner', 'revisions', 'dateModified') + schematics_embedded_role)
 edit_role = (blacklist('owner_token', 'owner', 'revisions', 'dateModified', 'doc_id', 'planID') + schematics_embedded_role)
 cancel_role = whitelist('status')
 view_role = (blacklist('owner', 'owner_token', '_attachments', 'revisions') + schematics_embedded_role)
