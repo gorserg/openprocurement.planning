@@ -5,13 +5,9 @@ from pyramid.security import (
     Deny,
     Everyone,
 )
-
 from openprocurement.api.utils import error_handler
 from openprocurement.planning.api.models import Plan
 
-
-def get_planning_acl():
-    return PlanRoot.__acl__
 
 class PlanRoot(object):
     __name__ = None
@@ -27,6 +23,11 @@ class PlanRoot(object):
     def __init__(self, request):
         self.request = request
         self.db_plan = request.registry.db_plan
+
+
+def get_planning_acl():
+    return PlanRoot.__acl__
+
 
 def planning_factory(request):
     request.validated['plan_src'] = {}

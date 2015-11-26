@@ -7,8 +7,9 @@ from schematics.types.compound import ModelType, ListType, DictType
 from schematics.transforms import whitelist, blacklist, export_loop, convert
 from schematics.types.serializable import serializable
 from uuid import uuid4
-from  openprocurement.api.models import Model, CPVClassification, Classification, validate_dkpp, Unit, Period, \
-    Identifier, validate_cpv_group, IsoDateTimeType, Revision, schematics_default_role, schematics_embedded_role
+from  openprocurement.api.models import (Model, CPVClassification, Classification, validate_dkpp, Unit, Period,
+                                         Identifier, validate_cpv_group, IsoDateTimeType, Revision,
+                                         schematics_default_role, schematics_embedded_role)
 
 
 class Project(Model):
@@ -58,12 +59,13 @@ class PlanTender(Model):
 
 
 plain_role = (blacklist('revisions', 'dateModified') + schematics_embedded_role)
-create_role = (blacklist('owner_token', 'owner', 'revisions', 'dateModified') + schematics_embedded_role)
+create_role = (blacklist('owner_token', 'owner', 'revisions') + schematics_embedded_role)
 edit_role = (blacklist('owner_token', 'owner', 'revisions', 'dateModified', 'doc_id', 'planID') + schematics_embedded_role)
 cancel_role = whitelist('status')
 view_role = (blacklist('owner', 'owner_token', '_attachments', 'revisions') + schematics_embedded_role)
 listing_role = whitelist('dateModified', 'doc_id')
 Administrator_role = whitelist('status', 'mode', 'procuringEntity')
+
 
 class Plan(SchematicsDocument, Model):
     """Plan"""
@@ -89,15 +91,15 @@ class Plan(SchematicsDocument, Model):
     # procuringEntity:identifier:scheme *     Код Замовника -- Схема ідентификації по стандарту IATI, (наприклад код ЄДР - UA-EDR)
     # procuringEntity:identifier:id *         Для схеми UA-EDR - код ЄДРПОУ або ІПН
     # procuringEntity:name *                  Коротка назва организації (наприклад - ДУС)
-    # procuringEntity:identifier:legalName *  Повна назва организації (наприклад - ДП “Державне Уравління Справами”)
+    # procuringEntity:identifier:legalName *  Повна назва організації (наприклад - ДП “Державне Уравління Справами”)
     procuringEntity = ModelType(PlanOrganization, required=True)
 
     # tender:tenderPeriod:startDate           Планова дата старту процедури
-    # tender:procurementMethod                Можливі варіанти: “допорогові закупівлі”, “відкриті торги”, ”конкурентний діалог”, “переговорна процедура” та  “рамкова угода”
+    # tender:procurementMethod                Можливі варіанти: “open”
     tender = ModelType(PlanTender, required=False)
 
-    # budget:project:name                     Назва коду класифікатора КЕКВ
-    # budget:project:id                       Код класифікатора КЕКВ
+    # budget:project:name                     Назва проекту
+    # budget:project:id                       Код проекту
     # budget:id *                             Комбінація budget:project:id  та items[*]:classification:id
     # budget:description *                    Довільний опис статті бюджету
     # budget:amount *                         Планова сума з ПДВ
@@ -105,7 +107,7 @@ class Plan(SchematicsDocument, Model):
     budget = ModelType(Budget, required=True)
 
     planID = StringType()
-    mode = StringType(choices=['test']) # flag for test data ?
+    mode = StringType(choices=['test'])  # flag for test data ?
     items = ListType(ModelType(PlanItem), required=True, min_size=1, validators=[validate_cpv_group])
     dateModified = IsoDateTimeType()
     owner_token = StringType()
@@ -120,9 +122,7 @@ class Plan(SchematicsDocument, Model):
             # for i in self.bids
         ]
         acl.extend([
-            (Allow, '{}_{}'.format(self.owner, self.owner_token), 'edit_tender'),
-            (Allow, '{}_{}'.format(self.owner, self.owner_token), 'upload_tender_documents'),
-            (Allow, '{}_{}'.format(self.owner, self.owner_token), 'review_complaint'),
+            (Allow, '{}_{}'.format(self.owner, self.owner_token), 'edit_plan'),
         ])
         return acl
 

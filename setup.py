@@ -21,6 +21,7 @@ requires = [
     'rfc6266',
     'setuptools',
     'tzlocal',
+    'openprocurement.api'
 ]
 
 test_requires = requires + [
@@ -47,15 +48,14 @@ setup(name='openprocurement.planning',
       author='Quintagroup, Ltd.',
       author_email='info@quintagroup.com',
       license='Apache License 2.0',
-      url='https://github.com/openprocurement/openprocurement.planning',
+      url='https://github.com/gorserg/openprocurement.planning',
       package_dir = {'': 'src'},
-      py_modules=['cgi'],
       packages=find_packages('src'),
-      namespace_packages = ['openprocurement.planning'],
+      namespace_packages = ['openprocurement', 'openprocurement.planning'],
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
       tests_require=test_requires,
       extras_require={'test': test_requires},
-      test_suite="openprocurement.api.tests.main.suite",
+      test_suite="openprocurement.planning.api.tests.main.suite",
       entry_points = entry_points)

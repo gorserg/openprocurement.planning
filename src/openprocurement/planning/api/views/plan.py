@@ -14,7 +14,7 @@ from openprocurement.planning.api.design import (PLAN_FIELDS, plans_real_by_date
                                                  plans_real_by_local_seq_planview, plans_test_by_local_seq_planview,
                                                  plans_by_local_seq_planview)
 from openprocurement.planning.api.models import Plan
-from openprocurement.planning.api import generate_plan_id, save_plan, plan_serialize
+from openprocurement.planning.api.utils import generate_plan_id, save_plan, plan_serialize
 from openprocurement.planning.api.validation import validate_plan_data, validate_patch_plan_data
 
 LOGGER = getLogger(__name__)
@@ -165,15 +165,9 @@ class PlanResource(object):
 
             {
                 "access": {
-                    "token": "174fd98e4e7347eb863f125c9e561b27"
+                    "token": "e4c75de4320649a4bbbdfa180e7a9ef2"
                 },
                 "data": {
-                    "tender": {
-                        "procurementMethod": "допорогові закупівлі",
-                        "tenderPeriod": {
-                            "startDate": "2015-05-09T23:11:39.720908+03:00"
-                        }
-                    },
                     "items": [
                         {
                             "classification": {
@@ -185,13 +179,18 @@ class PlanResource(object):
                                 {
                                     "scheme": "ДКПП",
                                     "id": "28.29.39-10.00",
-                                    "description": "Прилади контролювання маси та прилади контрольні автоматичні з максимальною масою зважування не більше ніж 5000 кг"
+                                    "description": "Прилади контролювання маси та прилади контрольні"
+                                },
+                                {
+                                    "scheme": "КЕКВ",
+                                    "id": "123",
+                                    "description": "-"
                                 }
                             ],
                             "deliveryDate": {
                                 "endDate": "2015-05-11T23:11:39.721063+03:00"
                             },
-                            "id": "84582807b5654bee9e216adb05e57d39",
+                            "id": "8cd4abfd0bbb489a83a81dec1393ab8d",
                             "unit": {
                                 "code": "KGM",
                                 "name": "кг"
@@ -199,6 +198,18 @@ class PlanResource(object):
                             "quantity": 760
                         }
                     ],
+                    "planID": "UA-2015-11-26-000001",
+                    "budget": {
+                        "amountNet": 12222,
+                        "description": "budget_description",
+                        "project": {
+                            "id": "proj_id",
+                            "name": "proj_name"
+                        },
+                        "currency": "UAH",
+                        "amount": 10000,
+                        "id": "budget_id"
+                    },
                     "procuringEntity": {
                         "identifier": {
                             "scheme": "UA-EDR",
@@ -207,18 +218,15 @@ class PlanResource(object):
                         },
                         "name": "ДУС"
                     },
-                    "budget": {
-                        "project": {
-                            "id": "proj_id",
-                            "name": "proj_name"
-                        },
-                        "amount": 10000,
-                        "amountNet": 12222,
-                        "id": "budget_id",
-                        "description": "budget_description"
-                    }
+                    "tender": {
+                        "procurementMethod": "open",
+                        "tenderPeriod": {
+                            "startDate": "2015-05-09T23:11:39.720908+03:00"
+                        }
+                    },
+                    "id": "ac658c4ff7ab47dea27e32d15a655ddb"
                 }
-            }
+}
         """
         plan_data = self.request.validated['data']
         plan_id = generate_id()

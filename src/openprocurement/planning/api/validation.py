@@ -8,5 +8,6 @@ def validate_plan_data(request):
     update_logging_context(request, {'plan_id': '__new__'})
     return validate_data(request, Plan)
 
+
 def validate_patch_plan_data(request):
     return validate_data(request, Plan, True)
