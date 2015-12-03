@@ -40,6 +40,7 @@ class PlanItem(Model):
     unit = ModelType(Unit)  # Description of the unit which the good comes in e.g. hours, kilograms
     quantity = IntType()  # The number of units required
     deliveryDate = ModelType(Period)
+    description = StringType(required=True)  # A description of the goods, services to be provided.
 
 
 class PlanOrganization(Model):
@@ -52,10 +53,8 @@ class PlanOrganization(Model):
 
 
 class PlanTender(Model):
-    procurementMethod = StringType(
-        choices=[u'допорогові закупівлі', u'відкриті торги', u'конкурентний діалог', u'переговорна процедура',
-                 u'рамкова угода', 'open'], default='open')
-    tenderPeriod = ModelType(Period, required=False)
+    procurementMethod = StringType(choices=['open'], default='open', required=True)
+    tenderPeriod = ModelType(Period, required=True)
 
 
 plain_role = (blacklist('revisions', 'dateModified') + schematics_embedded_role)
@@ -96,7 +95,7 @@ class Plan(SchematicsDocument, Model):
 
     # tender:tenderPeriod:startDate           Планова дата старту процедури
     # tender:procurementMethod                Можливі варіанти: “open”
-    tender = ModelType(PlanTender, required=False)
+    tender = ModelType(PlanTender, required=True)
 
     # budget:project:name                     Назва проекту
     # budget:project:id                       Код проекту
@@ -106,9 +105,13 @@ class Plan(SchematicsDocument, Model):
     # budget:amountNet                        Планова сума без ПДВ
     budget = ModelType(Budget, required=True)
 
+    classification = ModelType(CPVClassification, required=True)
+
+    additionalClassifications = ListType(ModelType(Classification), default=list(), required=False)
+
     planID = StringType()
     mode = StringType(choices=['test'])  # flag for test data ?
-    items = ListType(ModelType(PlanItem), required=True, min_size=1, validators=[validate_cpv_group])
+    items = ListType(ModelType(PlanItem), required=False, min_size=1, validators=[validate_cpv_group])
     dateModified = IsoDateTimeType()
     owner_token = StringType()
     owner = StringType()
